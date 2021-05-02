@@ -3,6 +3,7 @@
 #include <Button.h>
 #include <ButtonEventCallback.h>
 #include <BasicButton.h>
+#include <EEPROM.h>
 
 #define buzzerPin A3
 
@@ -40,8 +41,8 @@ const uint8_t sSHOWALARM = 3;
 
 uint8_t statoOnOff = sSHOWOFF;
 
-int counter = 0;
-char charsDisplay[5];
+long counter = 0;
+char charsDisplay[50];
 bool enableAlarm = false;
 int oreTMPALLARME = 0;
 int minutiTMPALLARME = 0;
@@ -49,19 +50,31 @@ int oreTMPSVEGLIA = 0;
 int minutiTMPSVEGLIA = 0;
 String alarmTime = "00.00";
 
+// EEPROM
+int addressCheckEEPROM = 200;       // tells that I've wrote something before into the EEPROM
+char writed_eeprom = "S";           // Char to write into addressCheckEEPROM
+
+int addressTimeAlarm = 0;           // ADDRESS of ALARM
+int addressStatusAlarm = 210;       // ADDRESS of enable/disable
+bool eeprom_first_save = true;      // flag to disable if EEPROM was previously wrote into.
+
+
 
 
 
 
 /////////// SETUP ///////////
 void setup() {
+  // Set serial comm (debug)
+  Serial.begin(9600);
+
   initButtons();
   initBuzzer();
   initRTC();
   initDisplay();
 
-  // Set serial comm (debug)
-  Serial.begin(9600);
+  checkEEPROM();
+
 }
 
 /////////// LOOP ///////////
@@ -104,8 +117,8 @@ void loop() {
         switch (statoOnOff) {
           case sSHOWOFF: {
               if(counter >= 3000) {
-                statoSveglia = sVISTA;
                 counter = 0;
+                statoSveglia = sVISTA;
 
                 Serial.println("Sveglia OFF");
               } else {
@@ -114,11 +127,9 @@ void loop() {
             }
             break;
           case sSHOWON: {
-              if(counter >= 1500) {
-                statoSveglia = sVISTA;
+              if(counter == 1500) {
                 counter = 0;
-                // statoOnOff = sSHOWALARM;
-                // counter = 0;
+                statoOnOff = sSHOWALARM;
 
                 Serial.println("Sveglia ON");
               } else {
@@ -128,23 +139,17 @@ void loop() {
             break;
           case sSHOWALARM: {
               if(counter >= 3000) {
-                statoSveglia = sVISTA;
                 counter = 0;
+                statoSveglia = sVISTA;
 
                 Serial.print("Sveglia alle ");
                 Serial.println(alarmTime);
               } else {
-                //char tmpShow[5];
-                //alarmTime.toCharArray(tmpShow, 6);
-                //sprintf(charsDisplay, "%s", alarmTime);
-                sprintf(charsDisplay, "%02d.%02d", oreTMPALLARME, oreTMPALLARME);
-                //alarmTime.toCharArray(charsDisplay, 6);
-                Serial.print("[");
-                Serial.print(counter);
-                Serial.println("]");
+                alarmTime.toCharArray(charsDisplay, alarmTime.length() + 1);
               }
             }
             break;
+
         }
       }
       break;
@@ -154,7 +159,6 @@ void loop() {
               if(counter > 5000) {
                 statoImpostaAllarme = sMINUTIALLARME;
                 counter = 0;
-
                 
                 Serial.println("Imposto ora i minuti...");
               } else {
@@ -168,6 +172,8 @@ void loop() {
 
                 impostaAllarme();
                 enableAlarm = true;
+                writeStringToEEPROM(addressTimeAlarm, alarmTime);
+                EEPROM.put(addressStatusAlarm, enableAlarm);
 
                 confirmSound();
           
@@ -217,18 +223,8 @@ void loop() {
   sevseg.setChars(charsDisplay);
   sevseg.refreshDisplay();
 
-  
-
-  switch (statoSveglia) {
-    // case sIMPOSTAALLARME:
-    //   counter += 250;
-    //   delay(250);
-    //   break;
-    default:
-      counter++;
-      delay(1);
-      break;
-  }
+  counter++;
+  delay(1);
 }
 
 
@@ -335,17 +331,19 @@ void onBtnAlarmPressed(Button& btn) {
   switch(statoSveglia) {
     case sONOFF: {
         switch (statoOnOff) {
-          //case sSHOWALARM:
+          case sSHOWALARM:
           case sSHOWON: {
               counter = 0;
               statoOnOff = sSHOWOFF;
               enableAlarm = false;
+              EEPROM.put(addressStatusAlarm, enableAlarm);
             }
             break;
           case sSHOWOFF: {
               counter = 0;
               statoOnOff = sSHOWON;
               enableAlarm = true;
+              EEPROM.put(addressStatusAlarm, enableAlarm);
             }
             break;
         }
@@ -418,10 +416,6 @@ void onBtnAlarmHold(Button& btn, uint16_t timeHold) {
   switch(statoSveglia) {
     case sONOFF: 
     case sVISTA: {
-        Time now = rtc.getTime();
-        oreTMPALLARME = now.hour;
-        minutiTMPALLARME = now.min;
-
         counter = 0;
         statoImpostaAllarme = sOREALLARME;
         statoSveglia = sIMPOSTAALLARME;
@@ -442,10 +436,7 @@ void impostaAllarme() {
   sprintf(tmpAlarm, "%02d.%02d", oreTMPALLARME, minutiTMPALLARME);
   alarmTime = String(tmpAlarm);
 
-  oreTMPALLARME = 0;
-  minutiTMPALLARME = 0;
-
-  Serial.print("Sveglia impostata alle ");
+  Serial.print("Sveglia impostata e salvata alle ");
   Serial.println(alarmTime);
 }
 
@@ -459,4 +450,49 @@ void confirmSound() {
   tone(buzzerPin, 1000, 300);
   delay(500);
   tone(buzzerPin, 800, 300);
+}
+
+
+void checkEEPROM() {
+  char tmpCheckWrited;
+  EEPROM.get(addressCheckEEPROM, tmpCheckWrited);
+  if(tmpCheckWrited == writed_eeprom) {
+    eeprom_first_save = false;
+    alarmTime = readStringFromEEPROM(addressTimeAlarm);
+    EEPROM.get(addressStatusAlarm, enableAlarm);
+    Serial.print("Alarm read from EEPROM ");
+    Serial.print(alarmTime);
+    Serial.print(" status ");
+    Serial.println(enableAlarm);
+  } else {
+    Serial.print("Char S not found but ");
+    Serial.println(tmpCheckWrited);
+  }
+}
+
+void writeStringToEEPROM(int addrOffset, const String &strToWrite)
+{
+  byte len = strToWrite.length();
+  EEPROM.write(addrOffset, len);
+  for (int i = 0; i < len; i++)
+  {
+    EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
+  }
+
+  if(eeprom_first_save) {
+    EEPROM.put(addressCheckEEPROM, writed_eeprom);
+  }
+}
+
+String readStringFromEEPROM(int addrOffset)
+{
+  int newStrLen = EEPROM.read(addrOffset);
+  char data[newStrLen + 1];
+  for (int i = 0; i < newStrLen; i++)
+  {
+    data[i] = EEPROM.read(addrOffset + 1 + i);
+  }
+  //char needed for string comparison
+  data[newStrLen] = '\0';
+  return String(data);
 }
