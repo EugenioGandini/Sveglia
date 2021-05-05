@@ -299,24 +299,33 @@ void onBtnTimePressed(Button& btn) {
         }
       } 
       break;
+    // increse HOUR or MINUTES for ALLARM
+    case sIMPOSTAALLARME: {
+        switch (statoImpostaAllarme) {
+          case sOREALLARME: {
+              counter = 0;
+              increaseHour(&oreTMPALLARME);
+            }
+            break;
+          case sMINUTIALLARME: {
+              counter = 0;
+              increaseMinutes(&minutiTMPALLARME);
+            }
+            break;
+        }
+      }
+      break;
+    // increse HOUR or MINUTES for TIME
     case sIMPOSTAORA: {
         switch (statoImpostaOra) {
           case sORESVEGLIA: {
               counter = 0;
-              if(oreTMPSVEGLIA == 23) {
-                oreTMPSVEGLIA = 0;
-              } else {
-                oreTMPSVEGLIA++;
-              }
+              increaseHour(&oreTMPSVEGLIA);
             }
             break;
           case sMINUTISVEGLIA: {
               counter = 0;
-              if(minutiTMPSVEGLIA == 59) {
-                minutiTMPSVEGLIA = 0;
-              } else {
-                minutiTMPSVEGLIA++;
-              }
+              increaseMinutes(&minutiTMPSVEGLIA);
             }
             break;
         }
@@ -334,16 +343,16 @@ void onBtnAlarmPressed(Button& btn) {
           case sSHOWALARM:
           case sSHOWON: {
               counter = 0;
-              statoOnOff = sSHOWOFF;
               enableAlarm = false;
-              EEPROM.put(addressStatusAlarm, enableAlarm);
+              EEPROM.put(addressStatusAlarm, enableAlarm);    // save EEPROM only when switch
+              statoOnOff = sSHOWOFF;
             }
             break;
           case sSHOWOFF: {
               counter = 0;
-              statoOnOff = sSHOWON;
               enableAlarm = true;
-              EEPROM.put(addressStatusAlarm, enableAlarm);
+              EEPROM.put(addressStatusAlarm, enableAlarm);    // save EEPROM only when switch
+              statoOnOff = sSHOWON;
             }
             break;
         }
@@ -366,24 +375,33 @@ void onBtnAlarmPressed(Button& btn) {
         statoSveglia = sONOFF;
       }
       break;
+    // decrease HOUR or MINUTES for ALLARM
     case sIMPOSTAALLARME: {
         switch (statoImpostaAllarme) {
           case sOREALLARME: {
               counter = 0;
-              if(oreTMPALLARME == 23) {
-                oreTMPALLARME = 0;
-              } else {
-                oreTMPALLARME++;
-              }
+              decreaseHour(&oreTMPALLARME);
             }
             break;
           case sMINUTIALLARME: {
               counter = 0;
-              if(minutiTMPALLARME == 59) {
-                minutiTMPALLARME = 0;
-              } else {
-                minutiTMPALLARME++;
-              }
+              decreaseMinutes(&minutiTMPALLARME);
+            }
+            break;
+        }
+      }
+      break;
+    // decrease HOUR or MINUTES for TIME
+    case sIMPOSTAORA: {
+        switch (statoImpostaOra) {
+          case sORESVEGLIA: {
+              counter = 0;
+              decreaseHour(&oreTMPSVEGLIA);
+            }
+            break;
+          case sMINUTISVEGLIA: {
+              counter = 0;
+              decreaseMinutes(&minutiTMPSVEGLIA);
             }
             break;
         }
@@ -495,4 +513,40 @@ String readStringFromEEPROM(int addrOffset)
   //char needed for string comparison
   data[newStrLen] = '\0';
   return String(data);
+}
+
+
+
+
+
+/*
+  Increase the hour passed in by 1.
+*/
+void increaseHour(int *hour){
+  if(*hour == 23) *hour = 0;
+  else *hour = *hour + 1;
+}
+
+/*
+  Increase the minutes passed in by 1.
+*/
+void increaseMinutes(int *minutes){
+  if(*minutes == 59) *minutes = 0;
+  else *minutes = *minutes + 1;
+}
+
+/*
+  Decrease the hour passed in by 1.
+*/
+void decreaseHour(int *hour){
+  if(*hour == 0) *hour = 23;
+  else *hour = *hour - 1;
+}
+
+/*
+  Decrease the minutes passed in by 1.
+*/
+void decreaseMinutes(int *minutes){
+  if(*minutes == 0) *minutes = 59;
+  else *minutes = *minutes - 1;
 }
