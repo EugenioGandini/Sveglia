@@ -35,4 +35,9 @@ in the project.
 
 ## Autore
 
-* Eugenio gandini
+* Eugenio Gandini [Page](https://github.com/EugenioGandini)
+
+## License
+
+This software is under [MIT LICENSE](LICENSE).
+If you want to use this software or part of this software please insert the copyright and author of this project.

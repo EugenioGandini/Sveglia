@@ -1,3 +1,13 @@
+/**
+ * Simple alarm
+ * 
+ * @author Eugenio Gandini
+ * @date 7 may 2021
+ * 
+ * Version 3 
+ * 
+ * MIT LICENSE.
+ */
 #include "SevSeg.h"
 #include <DS1302.h>
 #include <Button.h>
@@ -70,8 +80,6 @@ const char DATA_SAVED = "S";        // Char that sign something has been saved b
 int addressHourAlarm = 0;           // ADDRESS of hour alarm
 int addressMinAlarm = 1;            // ADDRESS of minutes alarm
 int addressStatusAlarm = 2;         // ADDRESS of enable/disable
-bool eeprom_first_save = true;      // flag to disable if EEPROM was previously wrote into.
-
 
 
 
@@ -521,7 +529,6 @@ void checkEEPROM() {
   EEPROM.get(addressCheckEEPROM, tmpCheckWrited);
 
   if(tmpCheckWrited == DATA_SAVED) {
-    eeprom_first_save = false;
 
     EEPROM.get(addressStatusAlarm, enableAlarm);
     EEPROM.get(addressHourAlarm, hourAlarm);
