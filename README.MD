@@ -1,35 +1,37 @@
-# Sveglia v1.0
+# Allarm v3.0
 
-Sveglia da comodino con opzioni:
-* Attiva/Disattiva sveglia
-* Regolazione ore/minuti
-* Impostazione ore/minuti sveglia
+Bed Simple Alarm with some features:
+* Enable/Disable alarm when needed.
+* Can set actual time and alarm time.
+* Mantains time also when it's off.
 
-## Componenti
-Componenti utilizzati:
+## Components
+Used components for the project:
 * Arduino nano
-* display a 7 segmenti con 4 cifre
+* one 7 segments display with 4 digits.
 * buzzer
-* RTC
-* 2 bottoni
+* RTC DS1302
+* 2 buttons
 
-Materiale aggiuntivo:
-* 2 resistenze da 10 KOhm per i bottoni
-* 4 resistenze da 1KOhm per le 4 cifre del display
-* Batteria bottone per RTC 3V
+Addition components:
+* 2 resistors of 10 KOhm for the 2 buttons
+* 4 resistors of 1KOhm for the 4 digits of the 7 segments
+* One battery CR2032 3V for the RTC
 
-## Schema elettrico
+## Electric schema
 
-Il cablaggio elettrico è il seguente:
+The cabe management of the circuit is as follows:
 
-![alt text](schema_cavi/schema_progetto.png?raw=true "Schema elettrico")
+![alt text](electric_schema/electric_schema.png?raw=true "Schema elettrico")
 
-## Codice
+## Code
 
-Il codice sorgente da fleshare sulla scheda è il file con estensione:
+Source code is ready to be flashed on an arduino nano. Look at:
 ```
  <<file>>.ino 
 ```
+in the project.
+<br><br>
 
 ## Autore
 
