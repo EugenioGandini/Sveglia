@@ -12,54 +12,64 @@ DS1302 rtc(A0, A1, A2);
 BasicButton btnTime = BasicButton(A4);
 BasicButton btnAlarm = BasicButton(A5);
 
-const uint8_t sVISTA = 1;
+
+// MAIN STATE MACHINE
+const uint8_t sVIEW = 1;
 const uint8_t sONOFF = 2;
-const uint8_t sIMPOSTAORA = 3;
-const uint8_t sIMPOSTAALLARME = 4;
+const uint8_t sSETTIME = 3;
+const uint8_t sSETALARM = 4;
 const uint8_t sSPLASH = 5;
 
-uint8_t statoSveglia = sSPLASH;
+uint8_t statusStateAlarm = sSPLASH;
 
-const uint8_t sNOSUONO = 1;
-const uint8_t sSUONA = 2;
-const uint8_t sSPENTA = 3;
+// SUB STATE MACHINE sVIEW
+const uint8_t sNOSOUND = 1;
+const uint8_t sSOUND = 2;
+const uint8_t sSOUNDOFF = 3;
 
-uint8_t statoSuonoSveglia = sNOSUONO;
+uint8_t statusAlarmSound = sNOSOUND;
 
-const uint8_t sORESVEGLIA = 1;
-const uint8_t sMINUTISVEGLIA = 2;
+// SUB STATE MACHINE sSETTIME
+const uint8_t sHOURSTIME = 1;
+const uint8_t sMINUTESTIME = 2;
 
-uint8_t statoImpostaOra = sORESVEGLIA;
+uint8_t statusSetTime = sHOURSTIME;
 
-const uint8_t sOREALLARME = 1;
-const uint8_t sMINUTIALLARME = 2;
+// SUB STATE MACHINE sSETALARM
+const uint8_t sHOURSALARM = 1;
+const uint8_t sMINUTESALARM = 2;
 
-uint8_t statoImpostaAllarme = sOREALLARME;
+uint8_t stateSetAlarm = sHOURSALARM;
 
+// SUB STATE MACHINE sONOFF
 const uint8_t sSHOWOFF = 1;
 const uint8_t sSHOWON = 2;
 const uint8_t sSHOWALARM = 3;
 
-uint8_t statoOnOff = sSHOWOFF;
+uint8_t stateOnOff = sSHOWOFF;
 
 // APP VERSION 
 const uint8_t APP_VERSION = 3;
 
 long counter = 0;
-char charsDisplay[50];
+char charsDisplay[10];
 bool enableAlarm = false;
-int oreTMPALLARME = 0;
-int minutiTMPALLARME = 0;
-int oreTMPSVEGLIA = 0;
-int minutiTMPSVEGLIA = 0;
-String alarmTime = "00.00";
+
+// values (HH:MM) for the alarm
+uint8_t hourAlarm = 0;
+uint8_t minAlarm = 0;
+
+// values (HH:MM) for the time
+uint8_t hourTime = 0;
+uint8_t minTime = 0;
 
 // EEPROM
 int addressCheckEEPROM = 200;       // tells that I've wrote something before into the EEPROM
-char writed_eeprom = "S";           // Char to write into addressCheckEEPROM
+const char DATA_SAVED = "S";        // Char that sign something has been saved before into EEPROM
 
-int addressTimeAlarm = 0;           // ADDRESS of ALARM
-int addressStatusAlarm = 210;       // ADDRESS of enable/disable
+int addressHourAlarm = 0;           // ADDRESS of hour alarm
+int addressMinAlarm = 1;            // ADDRESS of minutes alarm
+int addressStatusAlarm = 2;         // ADDRESS of enable/disable
 bool eeprom_first_save = true;      // flag to disable if EEPROM was previously wrote into.
 
 
@@ -78,7 +88,6 @@ void setup() {
   initDisplay();
 
   checkEEPROM();
-
 }
 
 /////////// LOOP ///////////
@@ -86,150 +95,147 @@ void loop() {
   btnTime.update();  
   btnAlarm.update();
 
-  switch(statoSveglia) {
-    case sVISTA: {
-        if(counter >= 1000) {
-          Time now = rtc.getTime();
-          sprintf(charsDisplay, "%02d.%02d", now.hour, now.min);
-          counter = 0;
+  switch(statusStateAlarm) {
+    case sVIEW:
+      if(counter >= 1000) {
+        Time now = rtc.getTime();
+        hourTime = now.hour;
+        minTime = now.min;
+        sprintf(charsDisplay, "%02d.%02d", hourTime, minTime);
+        counter = 0;
 
-          if(enableAlarm) {
-            switch (statoSuonoSveglia) {
-              case sNOSUONO: {
-                  if(String(charsDisplay).equals(alarmTime)) {
-                    statoSuonoSveglia = sSUONA;
-                  }
-                }
-                break;
-              case sSUONA: {
-                  startAlarmSound();
-                }            
-                break;
-              case sSPENTA: {
-                  if(!String(charsDisplay).equals(alarmTime)) {
-                    Serial.println("Alarm ready for next round...");
-                    statoSuonoSveglia = sNOSUONO;
-                  }
-                }
-                break;
-            }
+        if(enableAlarm) {
+          switch (statusAlarmSound) {
+            case sNOSOUND:
+              if(hourTime == hourAlarm && minTime == minAlarm) {
+                statusAlarmSound = sSOUND;
+              }
+              break;
+
+            case sSOUND:
+              startAlarmSound();
+              break;
+
+            case sSOUNDOFF:
+              if(hourTime != hourAlarm || minTime != minAlarm) {
+                Serial.println("Alarm ready for next round...");
+                statusAlarmSound = sNOSOUND;
+              }
+              break;
+
           }
         }
       }
       break;
-    case sONOFF: {
-        switch (statoOnOff) {
-          case sSHOWOFF: {
-              if(counter >= 3000) {
-                counter = 0;
-                statoSveglia = sVISTA;
 
-                Serial.println("Sveglia OFF");
-              } else {
-                sprintf(charsDisplay, " OFF");
-              }
-            }
-            break;
-          case sSHOWON: {
-              if(counter == 1500) {
-                counter = 0;
-                statoOnOff = sSHOWALARM;
+    case sONOFF:
+      switch (stateOnOff) {
+        case sSHOWOFF:
+          if(counter >= 3000) {
+            counter = 0;
+            statusStateAlarm = sVIEW;
 
-                Serial.println("Sveglia ON");
-              } else {
-                sprintf(charsDisplay, " ON ");
-              }
-            }
-            break;
-          case sSHOWALARM: {
-              if(counter >= 3000) {
-                counter = 0;
-                statoSveglia = sVISTA;
+            Serial.println("Alarm OFF");
+          } else {
+            sprintf(charsDisplay, " OFF");
+          }
+          break;
 
-                Serial.print("Sveglia alle ");
-                Serial.println(alarmTime);
-              } else {
-                alarmTime.toCharArray(charsDisplay, alarmTime.length() + 1);
-              }
-            }
-            break;
+        case sSHOWON:
+          if(counter == 1500) {
+            counter = 0;
+            stateOnOff = sSHOWALARM;
 
-        }
+            Serial.println("Alarm ON");
+          } else {
+            sprintf(charsDisplay, " ON ");
+          }
+          break;
+
+        case sSHOWALARM:
+          if(counter >= 3000) {
+            counter = 0;
+            statusStateAlarm = sVIEW;
+
+            Serial.println(String("Alarm at ") + hourAlarm + ":" + minAlarm);
+          } else {
+            sprintf(charsDisplay, "%02d.%02d", hourAlarm, minAlarm);
+          }
+          break;
+
       }
       break;
-    case sIMPOSTAALLARME: {
-        switch (statoImpostaAllarme) {
-          case sOREALLARME: {
-              if(counter > 5000) {
-                statoImpostaAllarme = sMINUTIALLARME;
-                counter = 0;
-                
-                Serial.println("Imposto ora i minuti...");
-              } else {
-                sprintf(charsDisplay, " %02d ", oreTMPALLARME);
-              }
-            }
-            break;
-          case sMINUTIALLARME: {
-              if(counter > 5000) {
-                Serial.println("Imposto l'allarme...");
 
-                impostaAllarme();
-                enableAlarm = true;
-                writeStringToEEPROM(addressTimeAlarm, alarmTime);
-                EEPROM.put(addressStatusAlarm, enableAlarm);
+    case sSETALARM:
+      switch (stateSetAlarm) {
+        case sHOURSALARM:
+          if(counter > 5000) {
+            stateSetAlarm = sMINUTESALARM;
+            counter = 0;
+            
+            Serial.println("Set now the minutes...");
+          } else {
+            sprintf(charsDisplay, " %02d ", hourAlarm);
+          }
+          break;
 
-                confirmSound();
-          
-                statoSveglia = sVISTA;
-                counter = 0;
-              } else {
-                sprintf(charsDisplay, " %02d ", minutiTMPALLARME);
-              }
-            }
-            break;
-        }
+        case sMINUTESALARM:
+          if(counter > 5000) {
+            Serial.println("Setting the alarm...");
+
+            setAllarm();
+
+            confirmSound();
+      
+            statusStateAlarm = sVIEW;
+            counter = 0;
+          } else {
+            sprintf(charsDisplay, " %02d ", minAlarm);
+          }
+          break;
+
       }
       break;
-    case sIMPOSTAORA: {
-        switch (statoImpostaOra) {
-          case sORESVEGLIA: {
-              if(counter > 5000) {
-                statoImpostaOra = sMINUTISVEGLIA;
-                counter = 0;
-                
-                Serial.println("Imposto ora i minuti...");
-              } else {
-                sprintf(charsDisplay, " %02d ", oreTMPSVEGLIA);
-              }
-            }
-            break;
-          case sMINUTISVEGLIA: {
-              if(counter > 5000) {
-                Serial.println("Imposto l'orario...");
 
-                impostaOra();
+    case sSETTIME:
+      switch (statusSetTime) {
+        case sHOURSTIME:
+          if(counter > 5000) {
+            statusSetTime = sMINUTESTIME;
+            counter = 0;
+            
+            Serial.println("Set now the minutes...");
+          } else {
+            sprintf(charsDisplay, " %02d ", hourTime);
+          }
+          break;
 
-                confirmSound();
-          
-                statoSveglia = sVISTA;
-                counter = 0;
-              } else {
-                sprintf(charsDisplay, " %02d ", minutiTMPSVEGLIA);
-              }
-            }
-            break;
-        }
+        case sMINUTESTIME:
+          if(counter > 5000) {
+            Serial.println("Setting the time...");
+
+            setTime();
+
+            confirmSound();
+      
+            statusStateAlarm = sVIEW;
+            counter = 0;
+          } else {
+            sprintf(charsDisplay, " %02d ", minTime);
+          }
+          break;
+
       }
       break;
-    case sSPLASH: {
-        if(counter >= 3000) {
-          statoSveglia = sVISTA;
-        } else {
-          sprintf(charsDisplay, "V. %02d", APP_VERSION);
-        }
+
+    case sSPLASH:
+      if(counter >= 3000) {
+        statusStateAlarm = sVIEW;
+      } else {
+        sprintf(charsDisplay, "V. %02d", APP_VERSION);
       }
       break;
+      
   }
 
   sevseg.setChars(charsDisplay);
@@ -271,8 +277,8 @@ void initButtons() {
   btnTime.onPress(onBtnTimePressed);
   btnAlarm.onPress(onBtnAlarmPressed);
 
-  btnTime.onHold(3000, onBtnTimeHold);
-  btnAlarm.onHold(3000, onBtnAlarmHold);
+  btnTime.onHold(5000, onBtnTimeHold);
+  btnAlarm.onHold(5000, onBtnAlarmHold);
 }
 
 /**
@@ -287,195 +293,214 @@ void initDisplay() {
   bool updateWithDelaysIn = true;
   byte hardwareConfig = COMMON_CATHODE; 
   sevseg.begin(hardwareConfig, numDigits, digitPins, segmentPins, resistorsOnSegments);
-  sevseg.setBrightness(100);
+  sevseg.setBrightness(10);
 }
 
 
 
 
-
+/**
+ * Callback when btn time is pressed
+ */
 void onBtnTimePressed(Button& btn) {
-  //Serial.println("On btn 1...");
+  Serial.println("On btn time...");
 
-  switch(statoSveglia) {
-    case sVISTA: {
-        switch (statoSuonoSveglia) {
-          case sSUONA:
-            statoSuonoSveglia = sSPENTA;
+  switch(statusStateAlarm) {
+    case sVIEW:
+      switch (statusAlarmSound) {
+        case sSOUND:
+          statusAlarmSound = sSOUNDOFF;
+          Serial.println("Alarm stopped");
+          break;
+        
+        default:
+          // nothing for now...
+          break;
+      }
+      break;
+    
+    // increse HOUR or MINUTES for ALLARM
+    case sSETALARM:
+      switch (stateSetAlarm) {
+        case sHOURSALARM: {
+            counter = 0;
+            increaseHour(&hourAlarm);
+          }
+          break;
+        case sMINUTESALARM: {
+            counter = 0;
+            increaseMinutes(&minAlarm);
+          }
+          break;
+      }
+      break;
+
+    // increse HOUR or MINUTES for TIME
+    case sSETTIME:
+      switch (statusSetTime) {
+        case sHOURSTIME: {
+            counter = 0;
+            increaseHour(&hourTime);
+          }
+          break;
+        case sMINUTESTIME: {
+            counter = 0;
+            increaseMinutes(&minTime);
+          }
+          break;
+      }
+      break;
+
+  }
+}
+
+/**
+ * Callback called when btn alarm is pressed
+ */
+void onBtnAlarmPressed(Button& btn) {
+  Serial.println("On btn alarm...");
+
+  switch(statusStateAlarm) {
+    case sONOFF:
+      switch (stateOnOff) {
+        case sSHOWALARM:
+        case sSHOWON: {
+            counter = 0;
+            enableAlarm = false;
+            EEPROM.put(addressStatusAlarm, enableAlarm);    // save EEPROM only when switch
+            stateOnOff = sSHOWOFF;
+          }
+          break;
+        case sSHOWOFF: {
+            counter = 0;
+            enableAlarm = true;
+            EEPROM.put(addressStatusAlarm, enableAlarm);    // save EEPROM only when switch
+            stateOnOff = sSHOWON;
+          }
+          break;
+      }
+
+      Serial.println(String("Alarm status: ") + enableAlarm);
+      break;
+
+    case sVIEW:
+      switch (statusAlarmSound) {
+          case sSOUND:
+            statusAlarmSound = sSOUNDOFF;
             Serial.println("Alarm stopped");
             break;
-          
-          default:
-            // niente per ora...
-            break;
-        }
-      } 
-      break;
-    // increse HOUR or MINUTES for ALLARM
-    case sIMPOSTAALLARME: {
-        switch (statoImpostaAllarme) {
-          case sOREALLARME: {
-              counter = 0;
-              increaseHour(&oreTMPALLARME);
-            }
-            break;
-          case sMINUTIALLARME: {
-              counter = 0;
-              increaseMinutes(&minutiTMPALLARME);
-            }
-            break;
-        }
       }
-      break;
-    // increse HOUR or MINUTES for TIME
-    case sIMPOSTAORA: {
-        switch (statoImpostaOra) {
-          case sORESVEGLIA: {
-              counter = 0;
-              increaseHour(&oreTMPSVEGLIA);
-            }
-            break;
-          case sMINUTISVEGLIA: {
-              counter = 0;
-              increaseMinutes(&minutiTMPSVEGLIA);
-            }
-            break;
-        }
-      }
-      break;
-  }
-}
 
-void onBtnAlarmPressed(Button& btn) {
-  Serial.println("On btn 2...");
-
-  switch(statoSveglia) {
-    case sONOFF: {
-        switch (statoOnOff) {
-          case sSHOWALARM:
-          case sSHOWON: {
-              counter = 0;
-              enableAlarm = false;
-              EEPROM.put(addressStatusAlarm, enableAlarm);    // save EEPROM only when switch
-              statoOnOff = sSHOWOFF;
-            }
-            break;
-          case sSHOWOFF: {
-              counter = 0;
-              enableAlarm = true;
-              EEPROM.put(addressStatusAlarm, enableAlarm);    // save EEPROM only when switch
-              statoOnOff = sSHOWON;
-            }
-            break;
-        }
-
-        Serial.print("Alarm status: ");
-        Serial.println(enableAlarm);
-      }
+      counter = 0;
+      if(enableAlarm) stateOnOff = sSHOWON;
+      else stateOnOff = sSHOWOFF;
+      statusStateAlarm = sONOFF;
       break;
-    case sVISTA: {
-        switch (statoSuonoSveglia) {
-            case sSUONA:
-              statoSuonoSveglia = sSPENTA;
-              Serial.println("Alarm stopped");
-              break;
-        }
 
-        counter = 0;
-        if(enableAlarm) statoOnOff = sSHOWON;
-        else statoOnOff = sSHOWOFF;
-        statoSveglia = sONOFF;
-      }
-      break;
     // decrease HOUR or MINUTES for ALLARM
-    case sIMPOSTAALLARME: {
-        switch (statoImpostaAllarme) {
-          case sOREALLARME: {
-              counter = 0;
-              decreaseHour(&oreTMPALLARME);
-            }
-            break;
-          case sMINUTIALLARME: {
-              counter = 0;
-              decreaseMinutes(&minutiTMPALLARME);
-            }
-            break;
-        }
+    case sSETALARM:
+      switch (stateSetAlarm) {
+        case sHOURSALARM:
+          counter = 0;
+          decreaseHour(&hourAlarm);
+          break;
+
+        case sMINUTESALARM:
+          counter = 0;
+          decreaseMinutes(&minAlarm);
+          break;
+
       }
       break;
+
     // decrease HOUR or MINUTES for TIME
-    case sIMPOSTAORA: {
-        switch (statoImpostaOra) {
-          case sORESVEGLIA: {
-              counter = 0;
-              decreaseHour(&oreTMPSVEGLIA);
-            }
-            break;
-          case sMINUTISVEGLIA: {
-              counter = 0;
-              decreaseMinutes(&minutiTMPSVEGLIA);
-            }
-            break;
-        }
+    case sSETTIME:
+      switch (statusSetTime) {
+        case sHOURSTIME:
+          counter = 0;
+          decreaseHour(&hourTime);
+          break;
+
+        case sMINUTESTIME:
+          counter = 0;
+          decreaseMinutes(&minTime);
+          break;
+
       }
       break;
+
   }
 }
 
+/**
+ * Callback when long pressing time btn.
+ */
 void onBtnTimeHold(Button& btn, uint16_t timeHold) {
   Serial.println("Set RTC...");
-  switch(statoSveglia) {
-    case sVISTA: {
-        Time now = rtc.getTime();
-        oreTMPSVEGLIA = now.hour;
-        minutiTMPSVEGLIA = now.min;
-
+  switch(statusStateAlarm) {
+    case sVIEW: {
         counter = 0;
-        statoImpostaOra = sORESVEGLIA;
-        statoSveglia = sIMPOSTAORA;
+        statusSetTime = sHOURSTIME;
+        statusStateAlarm = sSETTIME;
 
-        Serial.println("Imposta ora le ore...");
+        Serial.println("Set now the hours...");
       }
       break;
   }
 }
 
+/**
+ * Callback when long pressing alarm btn.
+ */
 void onBtnAlarmHold(Button& btn, uint16_t timeHold) {
   Serial.println("Set Alarm...");
 
-  switch(statoSveglia) {
+  switch(statusStateAlarm) {
     case sONOFF: 
-    case sVISTA: {
+    case sVIEW: {
         counter = 0;
-        statoImpostaAllarme = sOREALLARME;
-        statoSveglia = sIMPOSTAALLARME;
+        stateSetAlarm = sHOURSALARM;
+        statusStateAlarm = sSETALARM;
 
-        Serial.println("Imposta ora le ore...");
+        Serial.println("Set now the hours...");
       }
       break;
   }
 }
 
+/**
+ * Start sound
+ */
 void startAlarmSound() {
   tone(buzzerPin, 1000, 500);
-  Serial.println("SVEGLIA !!!!");
+  Serial.println("WAKE UP !!!!");
 }
 
-void impostaAllarme() {
-  char tmpAlarm[5];
-  sprintf(tmpAlarm, "%02d.%02d", oreTMPALLARME, minutiTMPALLARME);
-  alarmTime = String(tmpAlarm);
+/**
+ * Set the alarm time.
+ */
+void setAllarm() {
+  if(!enableAlarm) enableAlarm = true;
 
-  Serial.print("Sveglia impostata e salvata alle ");
-  Serial.println(alarmTime);
+  EEPROM.put(addressHourAlarm, hourAlarm);
+  EEPROM.put(addressMinAlarm, minAlarm);
+  EEPROM.put(addressStatusAlarm, enableAlarm);
+
+  Serial.println(String("Alarm set and saved at ") + hourAlarm + ":" + minAlarm);
 }
 
-void impostaOra() {
-  rtc.setTime(oreTMPSVEGLIA, minutiTMPSVEGLIA, 0);
+/**
+ * Set the actual time.
+ */
+void setTime() {
+  rtc.setTime(hourTime, minTime, 0);
 
-  Serial.print("Orario impostato!");
+  Serial.print("Set time completed!");
 }
 
+/**
+ * Confirm sound played for confirmating some operation...
+ */
 void confirmSound() {
   tone(buzzerPin, 1000, 300);
   delay(500);
@@ -483,50 +508,42 @@ void confirmSound() {
 }
 
 
+
+
+
+
+/**
+ * Check if in the EEPROM is saved something...
+ * If yes load all the data.
+ */
 void checkEEPROM() {
   char tmpCheckWrited;
   EEPROM.get(addressCheckEEPROM, tmpCheckWrited);
-  if(tmpCheckWrited == writed_eeprom) {
+
+  if(tmpCheckWrited == DATA_SAVED) {
     eeprom_first_save = false;
-    alarmTime = readStringFromEEPROM(addressTimeAlarm);
+
     EEPROM.get(addressStatusAlarm, enableAlarm);
-    Serial.print("Alarm read from EEPROM ");
-    Serial.print(alarmTime);
-    Serial.print(" status ");
-    Serial.println(enableAlarm);
+    EEPROM.get(addressHourAlarm, hourAlarm);
+    EEPROM.get(addressMinAlarm, minAlarm);
+
+    Serial.println(String("Alarm read from EEPROM ") + hourAlarm + ":" + minAlarm + " status " + enableAlarm);
   } else {
-    Serial.print("Char S not found but ");
-    Serial.println(tmpCheckWrited);
+    Serial.println(String("Char S not found but ") + tmpCheckWrited);
+
+    initEEPROM();
   }
 }
 
-void writeStringToEEPROM(int addrOffset, const String &strToWrite)
-{
-  byte len = strToWrite.length();
-  EEPROM.write(addrOffset, len);
-  for (int i = 0; i < len; i++)
-  {
-    EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
-  }
-
-  if(eeprom_first_save) {
-    EEPROM.put(addressCheckEEPROM, writed_eeprom);
-  }
+/**
+ * Init the EEPROM at first boot
+ */
+void initEEPROM() {
+  EEPROM.put(addressHourAlarm, hourAlarm);
+  EEPROM.put(addressMinAlarm, minAlarm);
+  EEPROM.put(addressStatusAlarm, enableAlarm);
+  EEPROM.put(addressCheckEEPROM, DATA_SAVED);
 }
-
-String readStringFromEEPROM(int addrOffset)
-{
-  int newStrLen = EEPROM.read(addrOffset);
-  char data[newStrLen + 1];
-  for (int i = 0; i < newStrLen; i++)
-  {
-    data[i] = EEPROM.read(addrOffset + 1 + i);
-  }
-  //char needed for string comparison
-  data[newStrLen] = '\0';
-  return String(data);
-}
-
 
 
 
@@ -534,7 +551,7 @@ String readStringFromEEPROM(int addrOffset)
 /*
   Increase the hour passed in by 1.
 */
-void increaseHour(int *hour){
+void increaseHour(uint8_t *hour){
   if(*hour == 23) *hour = 0;
   else *hour = *hour + 1;
 }
@@ -542,7 +559,7 @@ void increaseHour(int *hour){
 /*
   Increase the minutes passed in by 1.
 */
-void increaseMinutes(int *minutes){
+void increaseMinutes(uint8_t *minutes){
   if(*minutes == 59) *minutes = 0;
   else *minutes = *minutes + 1;
 }
@@ -550,7 +567,7 @@ void increaseMinutes(int *minutes){
 /*
   Decrease the hour passed in by 1.
 */
-void decreaseHour(int *hour){
+void decreaseHour(uint8_t *hour){
   if(*hour == 0) *hour = 23;
   else *hour = *hour - 1;
 }
@@ -558,7 +575,7 @@ void decreaseHour(int *hour){
 /*
   Decrease the minutes passed in by 1.
 */
-void decreaseMinutes(int *minutes){
+void decreaseMinutes(uint8_t *minutes){
   if(*minutes == 0) *minutes = 59;
   else *minutes = *minutes - 1;
 }
