@@ -16,8 +16,9 @@ const uint8_t sVISTA = 1;
 const uint8_t sONOFF = 2;
 const uint8_t sIMPOSTAORA = 3;
 const uint8_t sIMPOSTAALLARME = 4;
+const uint8_t sSPLASH = 5;
 
-uint8_t statoSveglia = sVISTA;
+uint8_t statoSveglia = sSPLASH;
 
 const uint8_t sNOSUONO = 1;
 const uint8_t sSUONA = 2;
@@ -40,6 +41,9 @@ const uint8_t sSHOWON = 2;
 const uint8_t sSHOWALARM = 3;
 
 uint8_t statoOnOff = sSHOWOFF;
+
+// APP VERSION 
+const uint8_t APP_VERSION = 3;
 
 long counter = 0;
 char charsDisplay[50];
@@ -215,6 +219,14 @@ void loop() {
               }
             }
             break;
+        }
+      }
+      break;
+    case sSPLASH: {
+        if(counter >= 3000) {
+          statoSveglia = sVISTA;
+        } else {
+          sprintf(charsDisplay, "V. %02d", APP_VERSION);
         }
       }
       break;
